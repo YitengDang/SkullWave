@@ -1,0 +1,8 @@
+170919 SP7 mCherry Skullcap Overview E13.0 63x Skull 1.czi.txt
+170919 SP7 mCherry Skullcap Overview E13.0 63x Skull 2.czi.txt
+170919 SP7 mCherry Skullcap Overview E13.0 63x Skull 3.czi.txt
+180220 SP7 mCherry Skullcap Overview E13.0 63x Skull 1 left.czi.txt
+180220 SP7 mCherry Skullcap Overview E13.0 63x Skull 1 right.czi.txt
+180220 SP7 mCherry Skullcap Overview E13.0 63x Skull 2 left.czi.txt
+180220 SP7 mCherry Skullcap Overview E13.0 63x Skull 2 right.czi.txt
+180220 SP7 mCherry Skullcap Overview E13.0 63x Skull 3.czi.txt

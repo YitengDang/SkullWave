@@ -1,0 +1,109 @@
+---
+title: "Distances between frontal bones"
+output: html_document
+date: '2022-07-18'
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(ggplot2)
+library(data.table)
+library(magrittr)
+
+```
+
+
+## Weight vs bone size
+```{r}
+# Load weights
+filename <- "/Users/dang/Documents/Projects/Tabler_skull/BAPN Data/Analysis/Embryo Weights (Control Vs BAPN).txt"
+data.weights <- fread(filename, dec=',')
+
+# much easier to work with matrix than with data.table
+mat <- as.matrix(data.weights)
+weight.mean <- apply(mat, 2, function(x) mean(x, na.rm=TRUE))
+weight.sd <- apply(mat, 2, function(x) sd(x, na.rm=TRUE))
+weight.data.table <- data.table("names" = colnames(mat), "weight.mean" = weight.mean, "weight.sd" = weight.sd)
+
+as.double( sapply(weight.data.table$names, function(x) gsub("E", "", unlist(strsplit(x, " "))[1])) )
+
+weight.data.table$time <- as.double( sapply(weight.data.table$names, function(x) gsub("E", "", unlist(strsplit(x, " "))[1])) )
+weight.data.table$Condition <- sapply(weight.data.table$names, function(x) unlist(strsplit(x, " "))[2])
+weight.data.table
+
+# plot weights
+ggplot(weight.data.table, aes(x=names, y=weight.mean))+
+  geom_point()+
+  geom_errorbar(ymin=weight.mean-weight.sd, ymax=weight.mean+weight.sd)+
+  coord_cartesian(ylim=c(0.1, 1.2))
+```
+
+```{r}
+filename <- "/Users/dang/Documents/Projects/Tabler_skull/Data_skull_expansion/Analysed_data/Skull_expansion_2_annotated_bone_sizes.csv"
+data.bone.sizes <- fread(filename, dec=',')
+data.bone.sizes
+data.bone.sizes$Condition[data.bone.sizes$Condition=="WT"] = "Control"
+
+avg.bone.area <- data.bone.sizes[, mean(Area_micron2, na.rm=TRUE), by=.(time, Condition)] %>% setnames(., "V1", "area.mean")
+avg.bone.sd <- data.bone.sizes[, sd(Area_micron2, na.rm=TRUE), by=.(time, Condition)] %>% setnames(., "V1", "area.sd")
+avg.bone.area.merged <- merge(avg.bone.area, avg.bone.sd, by=c("time", "Condition"))
+avg.bone.area.merged
+```
+
+Plot data against each other
+```{r}
+# first merge data frames
+data.merged <- merge(weight.data.table, avg.bone.area.merged, by=c("time", "Condition"), all.x=TRUE)
+data.merged
+
+# plot against each other
+ggplot(data.merged, aes(x=weight.mean, y=area.mean, color=time, shape=Condition))+
+  geom_point()+
+  geom_errorbarh(aes(xmin=weight.mean-weight.sd, xmax=weight.mean+weight.sd))+
+  geom_errorbar(aes(ymin=area.mean-area.sd, ymax=area.mean+area.sd))
+  
+```
+
+## Bone size spacings WT vs BAPN
+```{r load}
+
+filename <- "/Users/dang/Documents/Projects/Tabler_skull/Data_skull_expansion/Analysed_data/Skull_expansion_2_annotated_other.csv"
+data <- fread(filename, dec = ",")
+# data <- fread("sed 's/\\0//g' /Users/dang/Documents/Projects/Tabler_skull/Model_parameters/density_estimates.csv", dec = ".")
+
+colnames(data) <- sapply(colnames(data), function(x) gsub(" ", ".", x)) # replace spaces by . in column names
+
+data
+```
+
+```{r}
+# Distance between bones
+ggplot(data=data, aes(x=time, y=Dist.bones.top, color=Condition, shape=microscope))+
+  geom_jitter(width=0.1, height=0)
+
+ggplot(data=data, aes(x=time, y=Dist.bones.middle, color=Condition, shape=microscope))+
+  geom_jitter(width=0.1, height=0)
+
+ggplot(data=data, aes(x=time, y=Dist.bones.bottom, color=Condition, shape=microscope))+
+  geom_jitter(width=0.1, height=0)
+
+```
+
+
+```{r}
+# Length fractions
+ggplot(data=data, aes(x=time, y=Dist.top.fraction, color=Condition, shape=microscope))+
+  geom_jitter(width=0.1, height=0)+
+  coord_cartesian(ylim=c(0, 1))
+
+ggplot(data=data, aes(x=time, y=Dist.middle.fraction, color=Condition, shape=microscope))+
+  geom_jitter(width=0.1, height=0)+
+  coord_cartesian(ylim=c(0, 1))
+
+ggplot(data=data, aes(x=time, y=Dist.bottom.fraction, color=Condition, shape=microscope))+
+  geom_jitter(width=0.1, height=0)+
+  coord_cartesian(ylim=c(0, 1))
+```

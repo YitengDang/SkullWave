@@ -1,0 +1,520 @@
+---
+title: "Plot heatmap from imported data (xlsx)"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Import Data
+```{r} 
+library(ggplot2)
+library(data.table)
+library(magrittr)
+
+#import.folder <- "/Users/dang/Documents/Projects/Tabler_skull/Scripts/Scripts_mathematica/Plots_model4b_FD_solver/simulation_set3/"
+#import.folder <- "/Users/dang/Documents/Projects/Tabler_skull/Scripts/Scripts_mathematica/Plots_model4b_FD_solver/simulation_set6_vary_viscosity/"
+import.folder <- "/Users/dang/Documents/Projects/Tabler_skull/Scripts/Simulation_plots/Plots_model4b_FD_solver/simulation_set6_vary_viscosity/try2/"
+save.id <- "set6_sim2" #set3_sim4b2"
+
+#import.folder <- "./data/sim6/"
+import.file.params <- paste0(import.folder,"data_parameters.csv")
+import.file.rho <- paste0(import.folder,"data_rho_1.csv")
+import.file.phi <- paste0(import.folder,"data_phi_1.csv")
+import.file.V <- paste0(import.folder,"data_V_1.csv")
+
+#data.rho <- read.table(import.file, sep="\t", header = TRUE)
+data.params <- read.csv(import.file.params, header=FALSE)
+data.rho.0 <- read.csv(import.file.rho, header=FALSE)
+data.phi.0 <- read.csv(import.file.phi, header=FALSE)
+data.V.0 <- read.csv(import.file.V, header=FALSE)
+
+# Import "single-cell" data from simulations (for velocity)
+data.xCells1 <- as.data.table( read.csv( paste0(import.folder,"1cell_sim1_xCellAll.csv"), header=FALSE) ) %>% setNames(., "x.raw")
+data.xCells2 <- as.data.table( read.csv( paste0(import.folder,"1cell_sim2_xCellAll.csv"), header=FALSE) ) %>% setNames(., "x.raw")
+data.xCells3 <- as.data.table( read.csv( paste0(import.folder,"1cell_sim3_xCellAll.csv"), header=FALSE) ) %>% setNames(., "x.raw")
+
+# Read off from data.params
+T.max <- 4
+#L <- 1500
+L <- 2000
+nT <- 100
+nX <- 200
+dX <- 2*L/nX
+dT <- T.max/nT
+  
+# saving figures
+#save.folder <- "/Users/dang/Documents/Projects/Tabler_skull/Scripts/Simulation_plots/plots"
+save.folder <- "./plots_set6/"
+
+```
+
+```{r}
+# Merge simulation data
+# example data
+# tmp <- as.data.frame.table(volcano)
+# tmp[1:2] <- lapply(tmp[1:2], as.numeric)
+# tmp<-setNames(tmp, c("X", "Y", "Z") )
+# pre-processing
+# tmp <- as.matrix(data.V)
+
+data.rho.0 <- as.matrix(data.rho.0)
+data.rho <- as.data.frame.table(data.rho.0)
+data.rho[1:2] <- lapply(data.rho[1:2], as.numeric)
+data.rho<-setNames(data.rho, c("X", "Time", "rho") )
+
+data.phi.0 <- as.matrix(data.phi.0)
+data.phi <- as.data.frame.table(data.phi.0)
+data.phi[1:2] <- lapply(data.phi[1:2], as.numeric)
+data.phi<-setNames(data.phi, c("X", "Time", "phi") )
+
+data.V.0 <- as.matrix(data.V.0)
+data.V <- as.data.frame.table(data.V.0)
+data.V[1:2] <- lapply(data.V[1:2], as.numeric)
+data.V<-setNames(data.V, c("X", "Time", "V") )
+
+data.merged <- as.data.table( merge(merge(data.rho, data.phi), data.V ) )
+#library(dplyr)
+#list(tmp.rho, tmp.phi) %>% reduce(full_join, by='variable_name')
+
+# convert X to physical units
+data.merged[ , X.micron := -L+(2*L)*(X-1)/(nX) ]
+
+```
+
+```{r}
+# Merge simulated single cell track data
+# initial position
+data.xCells1$x0 = 0;
+data.xCells2$x0 = -200;
+data.xCells3$x0 = -400;
+data.xCells1[, x0 := 0] %>% .[, location := 'Bone Front']
+data.xCells2[, x0 := -200] %>% .[, location := 'In Bone']
+data.xCells3[, x0 := -400] %>% .[, location := 'Further In Bone']
+
+# correct positions w.r.t. x0 (only run once!)
+data.xCells1$x = data.xCells1$x.raw - data.xCells1$x0
+data.xCells2$x = data.xCells2$x.raw - data.xCells2$x0
+data.xCells3$x = data.xCells3$x.raw - data.xCells3$x0
+
+# time
+data.xCells1$time = (1:nrow(data.xCells1) - 1)*dT
+data.xCells2$time = (1:nrow(data.xCells2) - 1)*dT
+data.xCells3$time = (1:nrow(data.xCells3) - 1)*dT
+
+#data.xCells.merged <- rbindlist( list('Bone Front'=data.xCells1, 'In Bone'=data.xCells2, 'Further In Bone'=data.xCells3), idcol=TRUE )
+data.xCells.merged <- rbindlist( list(data.xCells1, data.xCells2, data.xCells3) )
+data.xCells.merged
+```
+
+### Load other relvant data & pre-process
+Load in vivo skull expansion data
+```{r}
+# Skull expansion data (in vivo)
+data.skull.expansion <- fread('./exp_data/data_skull_expansion_series.csv')
+data.skull.expansion[, lin.size.um := sqrt(area)*1000 ]
+
+ggplot( data.skull.expansion, aes(x=time, y=lin.size.um) )+
+  geom_point()
+
+```
+
+Load ex vivo image data (front + cells)
+```{r}
+# Ex vivo image data
+filename <- "./exp_data/data_ex_vivo_videos_1_to_4_all_interfaces.csv"
+data.live.interface <- fread(filename, drop='V1')
+#data.live.interface$data_set <- as.factor(data.live.interface$data_set)
+
+# cell tracks
+filename <- "./exp_data/data_ex_vivo_tracked_cells_all.csv"
+data.live.cells <- fread(filename, drop='V1')
+#data.live.cells$data_set <- as.factor(data.live.cells$data_set)
+
+ggplot(data=data.live.interface[time <= 6], aes(x=time, y=interface_height, color=factor(data_set)))+
+  geom_line()+
+  ggtitle('interface')
+
+ggplot(data=data.live.cells, aes(x=time, y=mean_displacement, color=factor(data_set), linetype=location ) )+
+  geom_line()+
+  ggtitle('ex vivo tracked cells')
+
+```
+
+```{r}
+# Load and analyze tracked cell *velocities* (ex vivo)
+velocities_file <- "/Users/dang/Documents/Projects/Tabler_skull/Data_Adrian_cell_tracks/Analyzed_data/Velocities_all_videos.csv"
+velocities <- fread(velocities_file, drop='V1')
+
+velocities[, X.origin := mean(.SD[Location=='Bone Front']$X0), by=.(Video) ]
+velocities[, X0_new := X0 - X.origin, by=.(Video, Location)]
+# velocities[Location=='Bone Front', mean(X0_new), by=.(Video)]
+
+velocities.mean <- velocities[, .(X0.mean=mean(X0_new), V.mean=mean(Velocity), V.sd=sd(Velocity), n=.N), by=.(Video, Location) ]
+velocities.mean2 <- velocities[, .(X0.mean.mean=mean(X0_new), V.mean.mean = mean(Velocity),
+                                   X0.mean.sd=sd(X0_new), V.mean.sd=sd(Velocity)), by=.(Location) ]
+
+```
+
+Calculate relevant data frames
+```{r}
+## simulated front 
+T.front.sim <- 0
+T.all <- (seq(0:nT)-1)/nT*T.max
+tmp <- as.data.table(data.phi) %>% .[phi < 0.5, .(X.min = min(X)), by=.(Time) ]
+X.front.sim <- tmp$X.min*dX
+X.front.sim <- X.front.sim - X.front.sim[1]
+data.front.sim <- as.data.table( list(time=T.all, interface_height=X.front.sim) )
+
+# simulated data shows step-like progression. Fit a linear function through simulation data.
+# table(data.front.sim$interface_height)
+model <- lm(interface_height ~ 0 + time, data=data.front.sim)
+#plot(model)
+# data.front.sim.2 <- data.table( time=c(0, tmax), interface_height=c(model$coefficients[1],  model$coefficients[1]+model$coefficients[2]*tmax) ) # 2 parameters (intercept + slope)
+# data.front.sim.2 <- data.table( time=c(0, tmax), interface_height=c(0,  0+model$coefficients[[1]]*tmax) )
+data.front.sim.2 <- data.table( time=c(0, T.max), interface_height=c(0,  0+model$coefficients[[1]]*T.max) )
+
+## in vivo skull expansion front (estimate)
+t1=13.5
+t2=14.0
+tmax <- 6
+V.front.exp.invivo <- (mean(data.skull.expansion[time==t2]$lin.size.um) - mean(data.skull.expansion[time==t1]$lin.size.um) )/((t2-t1)*24)
+data.front.in.vivo <- as.data.table( list(time=c(0, tmax), interface_height=c(0, tmax*V.front.exp.invivo)) )
+
+## cell tracks
+filename <- "./exp_data/data_ex_vivo_tracked_cells_all.csv"
+data.live.cells <- fread(filename, drop='V1')
+data.live.cells %>% setnames(., old=c("mean_displacement"), new=c("x"))
+
+data.single.cells.merged <- rbindlist( list(ex.vivo=data.live.cells, simulated=data.xCells.merged), fill=TRUE, idcol="source")
+data.single.cells.merged[, x_avg := mean(x), by=.(time, source, location)] %>%
+  .[, x_sem := sd(x)/sqrt(.N), by=.(time, source, location)]
+
+```
+
+Merge all data into one df
+```{r}
+data.live.cells.filt <- data.live.cells[, c('time', 'x', 'data_set')]
+#data.live.cells.filt <- data.live.cells[, c('time', 'mean_displacement', 'data_set')] %>% setnames(., c('time', 'x', 'data_set') )
+data.xCells.merged.filt <- data.xCells.merged[location=='Bone Front', c('time', 'x')]
+
+data.front.sim.2.filt <- data.front.sim.2[, c('time', 'interface_height')] %>% setnames(., c('time', 'x') )
+#data.front.sim.filt <- data.front.sim[, c('time', 'interface_height')] %>% setnames(., c('time', 'x') )
+data.front.in.vivo.filt <- data.front.in.vivo[, c('time', 'interface_height')] %>% setnames(., c('time', 'x') )
+
+data.live.interface.filt <- data.live.interface[, c('time', 'interface_height', 'data_set')] %>% setnames(., c('time', 'x', 'data_set') )
+
+data.merged.filt <- rbindlist( list(cells.ex.vivo=data.live.cells.filt, 
+                cells.sim=data.xCells.merged.filt,
+                front.sim=data.front.sim.2.filt,
+                front.in.vivo=data.front.in.vivo.filt,
+                front.ex.vivo=data.live.interface.filt), fill=TRUE, idcol="id" )
+
+data.merged.filt[, location := ifelse(id %in% c("cells.ex.vivo", "cells.sim"), "cells", "front") ]
+data.merged.filt[, source := ifelse(id=='front.in.vivo', 
+                                    'in vivo', 
+                                    ifelse(id %in% c("cells.ex.vivo", "front.ex.vivo"), "ex vivo", "sim") 
+                                    )]
+data.merged.filt[, x_avg := mean(x), by=.(time, id) ]
+data.merged.filt[, x_sem := sd(x)/sqrt(.N), by=.(time, id) ]
+
+#data.merged.filt[data.merged.filt[, source=='in vivo']]
+
+data.merged.filt
+```
+
+
+-----------------------------------------------------------------------------------
+
+## Plot heatmap of simulations
+```{r eval=FALSE}
+# using image()
+x<- seq(from = -L, to = L, length.out = nX+1)
+y<- seq(from = 0, to = T.max, length.out = nT+1)
+# 
+image(x, y, data.phi.0, xlab = "x (microns)", ylab = "t (hours)", 
+       asp=300, useRaster=TRUE)
+```
+
+```{r eval=FALSE}
+ggplot(data=data.merged, aes(X, Time, fill=rho)) + 
+  geom_tile()
+```
+
+### Plot simulated profile at specific time
+```{r fig.width=8, fig.height=3}
+L.plot <- 2000
+t.plot <- 100
+tmp.plot <- data.merged[Time==t.plot & X.micron>-L.plot & X.micron<L.plot,]
+
+# ggplot(data=tmp.plot, aes(x=X.micron, y=rho) )+
+#   geom_line()+
+#   labs(x=expression("Distance ("*mu*"m)"), y=expression(rho))+
+#   xlim(-L.plot, L.plot)+
+#   theme_bw()+
+#   theme(text=element_text(size=24),
+#         panel.grid.major = element_blank(),
+#         panel.grid.minor = element_blank())
+#   #ggsave(filename=paste0(save.folder, paste0("plot_rho_T1_", save.id, ".pdf")), width=8, height=3)
+
+ggplot(data=tmp.plot, aes(x=X.micron, y=phi) )+
+  geom_line()+
+  labs(x=expression("Distance ("*mu*"m)"), y=expression(phi))+
+  xlim(-L.plot, L.plot)+
+  ylim(0, 1)+
+  theme_bw()+
+  theme(axis.text=element_text(size=32),
+        axis.title=element_text(size=32,face="bold"),
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank())
+  #ggsave(filename=paste0(save.folder, paste0("plot_phi_T1_", save.id, ".pdf")), width=8, height=3)
+  
+ggplot(data=tmp.plot, aes(x=X.micron, y=V) )+
+  geom_line()+
+  labs(x=expression("Distance ("*mu*"m)"), y=expression(V))+
+  xlim(-L.plot, L.plot)+
+  theme_bw()+
+  theme(axis.text=element_text(size=32),
+        axis.title=element_text(size=32, face="bold"),
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank()
+        )
+  #ggsave(filename=paste0(save.folder, paste0("plot_V_T1_", save.id, ".pdf")), width=8, height=3)
+
+```
+
+```{r fig.width=8, fig.height=3}
+L.plot <- 1000
+tmp.plot <- data.merged[Time %in% c(1, 51, 101) & X.micron>-L.plot & X.micron<L.plot,]
+
+ggplot(data=tmp.plot, aes(x=X.micron, y=phi, color=factor(Time)) )+
+  geom_line()+
+  labs(x=expression("Distance ("*mu*"m)"), y=expression(phi))+
+  xlim(-L.plot, L.plot)+
+  ylim(0, 1)+
+  theme_bw()+
+  theme(axis.text=element_text(size=32, colour="black"),
+        axis.title=element_text(size=32,face="bold"),
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank() )
+  #ggsave(filename=paste0(save.folder, paste0("plot_phi_T1_1_51_101.pdf")), width=8, height=3)
+``` 
+
+
+### Plot simulated profile at specific time with experimentally tracked cells
+```{r eval=FALSE}
+ggplot(velocities, aes(x=X0_new, y=Velocity, color=Location) )+
+  facet_wrap(~Video)+
+  geom_point()
+  
+ggplot( data=velocities.mean, aes(x=X0.mean, y=V.mean, ymin=V.mean-V.sd, ymax=V.mean+V.sd, color=Location) )+
+  facet_wrap(~Video)+
+  geom_crossbar()
+  #+#geom_point(data=velocities, aes(x=X0_new, y=Velocity) )
+
+```
+
+```{r}
+# Plot together with simulations
+ggplot(data=tmp.plot[X.micron>-1000 & X.micron<1000], aes(x=X.micron, y=V) )+
+  geom_line()+
+  geom_point(data=velocities.mean2, aes(x=X0.mean.mean, y=V.mean.mean) )+
+  geom_errorbar(data=velocities.mean2, aes(x=X0.mean.mean, y=V.mean.mean, ymin = V.mean.mean-V.mean.sd, ymax = V.mean.mean+V.mean.sd)) + 
+  geom_errorbarh(data=velocities.mean2, aes(x=X0.mean.mean, y=V.mean.mean, xmin = X0.mean.mean-X0.mean.sd, xmax = X0.mean.mean+X0.mean.sd))+
+  labs(x=expression("Distance ("*mu*"m)"), y=expression(V))+
+  theme_bw()+
+  theme(aspect.ratio=3/4,
+        axis.text=element_text(size=16),
+        axis.title=element_text(size=16,face="bold") )
+#ggsave( paste0(save.folder, 'cell_velocities_profile_sim8.pdf'), width=8, height=6  )
+
+# With data points
+#velocities$Video <- as.factor(velocities$Video)
+
+ggplot(data=tmp.plot[X.micron>-1000 & X.micron<1000], aes(x=X.micron, y=V) )+
+  geom_line()+
+  geom_point(data=velocities, aes(x=X0_new, y=Velocity, shape=factor(Video)) )+
+  labs(x=expression("Distance ("*mu*"m)"), y=expression(V))+
+  theme(axis.text=element_text(size=16),
+        axis.title=element_text(size=16,face="bold"))+
+  theme_bw()
+```
+
+
+### Plot simulated fronts vs experimental fronts
+```{r eval=FALSE}
+data.front.sim.2 <- data.front.sim[time %in% c(0, tmax)]
+data.front.in.vivo <- as.data.table( list(time=c(0, tmax), interface_height=c(0, tmax*V.front.exp.invivo)) )
+#data.live.interface
+
+ggplot()+
+  #geom_line(data=data.front.sim[time <= tmax], aes(x=time, y=interface_height)  )+
+  geom_line(data=data.front.sim.2[time <= tmax], aes(x=time, y=interface_height, linetype='sim')  )+
+  geom_line(data=data.front.in.vivo[time <= tmax], aes(x=time, y=interface_height, linetype='in vivo') )+
+  geom_line(data=data.live.interface[time <= tmax], aes(x=time, y=interface_height, color=factor(data_set) ))
+#ggsave( paste0(save.folder, 'plot_fronts_exp_vs_sim_', save.id, '.pdf') )
+
+```
+
+### Plot simulated cell tracks vs experimental cell tracks
+```{r}
+tmax <- 6
+ggplot(data.single.cells.merged[time <= tmax], aes(x=time, y=x_avg, color=location, linetype=source) )+
+  geom_line()+
+  geom_ribbon( aes(ymin=x_avg-x_sem, ymax=x_avg+x_sem, fill=location, alpha=0.01) )
+# ggsave( paste0(save.folder, 'plot_cells_exp_vs_sim_', save.id, '.pdf') )
+
+# dotted lines: simulations
+# dashed ribbons: ex vivo tracked cells mean + SEM (avg over experiments)
+```
+
+
+### plot velocities as bar graph
+```{r eval=FALSE}
+# plot velocities - bar graph
+# simulated front
+data.phi <- as.data.table(data.phi)
+tmp <- data.phi[phi < 0.5, .(X.min = min(X)), by=.(Time) ]
+V.front.sim <- (tmp[Time==max(Time)]$X.min - tmp[Time==min(Time)]$X.min)*dX/T.max
+
+# simulated cells (at the front)
+# V.cells.sim <- max(as.data.table(data.V)[Time==nT+1]$V) (easy velocity)
+V.cells.sim <- (data.xCells.merged[x0==0 & time==T.max]$x)/T.max
+
+# exp cells
+V.cells.exp <- velocities.mean2[Location=='Bone Front']$V.mean.mean
+t1 <- 13.5
+t2 <- 14.0
+
+# exp front (ex vivo)
+tmax <- 6
+V.front.exp.exvivo <- mean( (data.live.interface[time==tmax]$interface_height)/tmax )
+
+# exp front (in vivo)
+V.front.exp.invivo <- (mean(data.skull.expansion[time==t2]$lin.size.um) - mean(data.skull.expansion[time==t1]$lin.size.um) )/((t2-t1)*24)
+
+#pdf(file="velocities_barplot_sim10.pdf")
+barplot( c(V.front.sim, V.front.exp.invivo, V.front.exp.exvivo, V.cells.sim, V.cells.exp ),
+        names.arg = c("Front (sim)", "Front in vivo", "Front ex vivo", "Cells (sim)", "Cells (ex vivo)"),
+        ylab = "microns/hr")
+#dev.off()
+```
+
+### Plot everything together
+Merge everything together and plot
+```{r}
+# Plot result
+tmax <- 6
+ggplot(data=data.merged.filt[time<=tmax], aes(x=time, y=x_avg, linetype=source, color=location)  )+
+  geom_ribbon( aes(ymin=x_avg-x_sem, ymax=x_avg+x_sem, fill=location, color=NA, alpha=0.01) )+
+  geom_line( lwd=1 )+
+  labs(x="Time (hr)", y="Displacement (microns)")+
+  theme_bw()+
+  theme(aspect.ratio=3/4,
+        axis.text=element_text(size=16),
+        axis.title=element_text(size=16,face="bold") )+
+  scale_color_brewer(palette = "Dark2", aesthetics = c("colour", "fill"))
+
+#ggsave( paste0(save.folder, 'plot_all_exp_vs_sim_', save.id, '.pdf') )
+```
+
+```{r}
+# Plot cell velocities
+tmp.plot <- data.merged[Time==1,]
+ggplot(data=tmp.plot[X.micron>-1000 & X.micron<1000], aes(x=X.micron, y=V) )+
+  geom_line()+
+  geom_point(data=velocities.mean2, aes(x=X0.mean.mean, y=V.mean.mean) )+
+  geom_errorbar(data=velocities.mean2, aes(x=X0.mean.mean, y=V.mean.mean, ymin = V.mean.mean-V.mean.sd, ymax = V.mean.mean+V.mean.sd)) + 
+  geom_errorbarh(data=velocities.mean2, aes(x=X0.mean.mean, y=V.mean.mean, xmin = X0.mean.mean-X0.mean.sd, xmax = X0.mean.mean+X0.mean.sd))+
+  labs(x=expression("Distance ("*mu*"m)"), y=expression(V))+
+  theme_bw()+
+  theme(aspect.ratio=3/4,
+        axis.text=element_text(size=16),
+        axis.title=element_text(size=16,face="bold") )
+#ggsave( paste0(save.folder, 'cell_velocities_profile_', save.id, '.pdf'), width=8, height=6  )
+
+```
+
+```{r}
+# Plot result
+# tmax <- 6
+# ggplot( data=data.merged.filt[source %in% c('in vivo', 'sim')], aes(x=time, y=x_avg, linetype=source, color=location, alpha=0.01)  )+
+#   geom_line()
+# 
+# ggplot(data=data.merged.filt[time<=tmax], aes(x=time, y=x_avg, linetype=source, color=location)  )+
+#   geom_ribbon( aes(ymin=x_avg-x_sem, ymax=x_avg+x_sem, fill=location, color=NA, alpha=0.01) )+
+#   geom_line( lwd=1 )+
+#   labs(x="Time (hr)", y="Displacement (microns)")+
+#   theme_bw()+
+#   theme(aspect.ratio=3/4,
+#         axis.text=element_text(size=16),
+#         axis.title=element_text(size=16,face="bold") )+
+#   scale_color_brewer(palette = "Dark2", aesthetics = c("colour", "fill"))
+
+#ggsave( paste0(save.folder, 'plot_all_exp_vs_sim_', save.id, '_310322.pdf') )
+```
+
+
+```{r}
+## OLD - separate data tables
+# # plot velocities - graph vs time
+# tmax <- 6
+# 
+# # plot data
+# ggplot()+
+#   #geom_line(data=data.front.sim[time <= tmax], aes(x=time, y=interface_height)  )+
+#   geom_line(data=data.front.sim.2[time <= tmax], aes(x=time, y=interface_height)  )+
+#   #geom_line(data=data.cells.sim[time <= tmax], aes(x=time, y=interface_height)  )+
+#   geom_line(data=data.xCells.merged[time <= tmax], aes(x=time, y=x, linetype=factor(x0) )  )+
+#   #geom_line(data=data.front.in.vivo[time <= tmax], aes(x=time, y=interface_height)  )+
+#   #geom_line(data=data.live.interface[time <= tmax], aes(x=time, y=interface_height, color=factor(data_set) ))+
+#   geom_line(data=data.live.cells[location=='Bone Front'], aes(x=time, y=mean_displacement, color=factor(data_set), linetype='-') )
+  
+```
+
+```{r}
+# OLD (with wrong simulated cell velocity)
+# merge data into one data frame
+# data.front.sim$source <- 'theory'
+# data.front.sim$location <- 'front'
+# data.front.sim.2$source <- 'theory'
+# data.front.sim.2$location <- 'front'
+# 
+# data.cells.sim$source <- 'theory'
+# data.cells.sim$location <- 'cells'
+# 
+# data.front.in.vivo$source <- 'in vivo'
+# data.front.in.vivo$location <- 'front'
+# 
+# data.live.interface$source <- 'ex vivo'
+# data.live.interface$location <- 'front'
+# 
+# data.live.cells.filt <- data.live.cells[location=='Bone Front', .(mean_displacement, data_set, time)] %>% setnames(c("interface_height", "data_set", "time"))
+# data.live.cells.filt$source <- 'ex vivo'
+# data.live.cells.filt$location <- 'cells'
+# 
+# data.all.merged <- rbindlist( list(data.front.sim.2, data.cells.sim, data.front.in.vivo, data.live.interface, data.live.cells.filt), fill=TRUE )
+# #data.all.merged <- rbindlist( list(data.front.sim, data.cells.sim, data.front.in.vivo, data.live.interface, data.live.cells.filt), fill=TRUE )
+# #data.all.merged.avg <- 
+# data.all.merged[, interface_avg := mean(interface_height), by=.(time, source, location)] %>%
+#   .[, interface_sem := sd(interface_height)/sqrt(.N), by=.(time, source, location)]
+# 
+# # plot data
+# ggplot(data=data.all.merged[time<=tmax & source=='ex vivo'], aes(x=time, y=interface_height,  color=location)  )+
+#   geom_ribbon( aes(ymin=interface_avg-interface_sem, ymax=interface_avg+interface_sem, alpha=0.2) )
+# 
+# ggplot(data=data.all.merged[time<=tmax], aes(x=time, y=interface_avg, linetype=source, color=location)  )+ # color=paste(source, location) 
+#   geom_ribbon( aes(ymin=interface_avg-interface_sem, ymax=interface_avg+interface_sem, fill=location, color=NA, alpha=0.01) )+
+#   geom_line()+
+#   labs(x="Time (hr)", y="Displacement (microns)")+
+#   #scale_color_viridis())+
+#   theme_bw()+
+#   theme(aspect.ratio=3/4,
+#         axis.text=element_text(size=16),
+#         axis.title=element_text(size=16,face="bold") )+
+#   scale_color_brewer(palette = "Dark2", aesthetics = c("colour", "fill"))
+# #ggsave( paste0(save.folder, "plots_displacement_all_sim10.pdf"), width=8, height=6 )
+
+```
+

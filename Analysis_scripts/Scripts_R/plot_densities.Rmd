@@ -1,0 +1,158 @@
+---
+title: "Untitled"
+output: html_document
+date: '2022-06-10'
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(ggplot2)
+library(data.table)
+library(magrittr)
+
+# save.folder.paper <- "/Users/yitengdang/Documents/Projects/Tabler_skull/Manuscript_cell_mvt_model/figs_v6/plots/"
+# save.folder.plots <- "/Users/yitengdang/Documents/Projects/Tabler_skull/Data_skull_expansion/plots/2022_07_27/"
+save.folder.plots <- "/Users/yitengdang/Documents/Projects/Tabler_skull/Model_parameters/plots/"
+```
+
+
+## Plot velocities
+```{r}
+#[11.43524112, 10.43090859, 13.62680583, 25.27532762]
+#[ 5.73863636,  7.84165547,  5.28930224, 13.75830797]
+
+filename <- "/Users/dang/Documents/Projects/Tabler_skull/Scripts/Simulation_plots/velocity_data.csv"
+data.velocities <- fread(filename, dec=',', header=F) %>% transpose %>% setnames(., c("V1", "V2"), c("Front", "Cells"))
+data.velocities$Experiment = 1:4
+data.velocities <- melt(data.velocities, 
+     id="Experiment",
+     variable.name = 'loc', value.name = 'velocity' )
+data.velocities$velocity <- data.velocities$velocity %>% as.numeric
+data.velocities[, velocity_mean := mean(velocity), by=.(loc)]
+data.velocities[, velocity_sem := sd(velocity)/sqrt(.N), by=.(loc)]
+data.velocities
+
+ggplot(data.velocities, aes(x=loc) )+
+  geom_jitter(aes(y=velocity), width=0.1, height=0)+
+  geom_crossbar( aes(y=velocity_mean, ymin=velocity_mean-velocity_sem, ymax=velocity_mean+velocity_sem) )+
+  labs(x='', y=expression('Rate of expansion (m/hr)') )+
+  #theme_classic(base_size=20)
+  theme_bw(base_size=14)
+  
+
+ggsave( paste0(save.folder.paper, "Expansion_speeds_live_imaging_6hrs_theme_bw.pdf"), width=7, height=5)
+ggsave( paste0(save.folder.plots, "Expansion_speeds_live_imaging_6hrs_theme_bw.pdf"), width=7, height=5)
+
+```
+
+
+## Plot densities
+```{r}
+
+# file.read <- "/Users/dang/Documents/Projects/Tabler_skull/Model_parameters/density_estimates.csv"
+# need to convert format 
+# https://stackoverflow.com/questions/22643372/embedded-nul-in-string-error-when-importing-csv-with-fread 
+# data <- fread("sed 's/\\0//g' /Users/dang/Documents/Projects/Tabler_skull/Model_parameters/density_estimates.csv", dec = ".")
+
+#filename <- "/Users/dang/Documents/Projects/Tabler_skull/_new_results/density_estimates.csv"
+filename <- "/Users/yitengdang/Documents/Projects/Tabler_skull/Model_parameters/density_estimates.csv"
+#data <- fread(paste("sed 's/\\0//g'", filename), dec=',' )
+data.densities <- fread(filename, dec=',' )
+#data$Condition <- as.factor(data$Condition)
+```
+
+```{r}
+# ggplot(data=data.densities, aes(x=location, y=cell_density, color=Condition))+
+#   geom_jitter(width=0.1, height=0)
+# 
+# ggplot(data=data.densities, aes(x=Condition, y=cell_density, color=location))+
+#   geom_jitter(width=0.1, height=0)
+# 
+# #ggplot(data=data, aes(x=location, y=cell_density))+
+# #  geom_dotplot()
+# 
+# ggplot(data=data.densities, aes(x=Condition, y=cell_density, color=location))+
+#   geom_boxplot()
+
+# average and sd
+# data.densities[, median(cell_density, na.rm=TRUE), by=.(location, Condition)]
+data.densities <- data.densities[data.densities$Condition %in% c("BAPN", "Ctrl")]
+data.densities[ , density.mean:=mean(cell_density, na.rm=TRUE), by=.(location, Condition)]
+data.densities[ , density.sem:=sd(cell_density, na.rm=TRUE)/sqrt(.N), by=.(location, Condition)]
+
+data.densities[data.densities$Condition=='Ctrl', ]$Condition <- "0Ctrl"
+ 
+ggplot(data.densities, aes(x=paste(Condition, location), y=cell_density, color=Condition) )+
+  #geom_jitter(width=0.1, height=0)+
+  geom_crossbar( aes(y=density.mean, ymin=density.mean-density.sem, ymax=density.mean+density.sem) )+
+  labs(x='', y='Density (cells/micron^2)' )+
+  theme_bw(base_size=14)
+
+ 
+#ggsave( paste0(save.folder.paper, "Cell_densities_by_condition_location.pdf"), width=7, height=5)
+ggsave( paste0(save.folder.plots, "Cell_densities_by_condition_location_boxplot_v2.pdf"), width=7, height=5)
+
+cond.ctrl.bone <- (data.densities$Condition=='Ctrl' & data.densities$location=='bone')
+cond.ctrl.mes <- (data.densities$Condition=='Ctrl' & data.densities$location=='mesenchyme')
+cond.bapn.bone <- (data.densities$Condition=='BAPN' & data.densities$location=='bone')
+cond.bapn.mes <- (data.densities$Condition=='BAPN' & data.densities$location=='mesenchyme')
+
+# Statistical tests
+wilcox.test( data.densities[cond.ctrl.bone]$cell_density, data.densities[cond.ctrl.mes]$cell_density )
+wilcox.test( data.densities[cond.bapn.bone]$cell_density, data.densities[cond.bapn.mes]$cell_density )
+wilcox.test( data.densities[cond.ctrl.mes]$cell_density, data.densities[cond.bapn.bone]$cell_density )
+
+#t.test( data.densities[cond.ctrl.bone]$cell_density, data.densities[cond.ctrl.mes]$cell_density )
+
+
+```
+
+## Estimate total number of cells
+
+### Load bone sizes
+```{r}
+filename <- "/Users/dang/Documents/Projects/Tabler_skull/Data_skull_expansion/Analysed_data/Skull_expansion_2_annotated_bone_sizes.csv"
+data.bone.sizes <- fread(filename, dec=',')
+data.bone.sizes$Condition[data.bone.sizes$Condition=="WT"] = "Control"
+
+ggplot(data.bone.sizes, aes(x=time, y=Area_micron2, color=Condition) )+
+  geom_jitter(width=0.1, height=0)
+
+```
+
+```{r}
+data.bone.sizes[ , Area_mm2 := Area_micron2/10^6]
+data.bone.sizes[ , Area_mean:=mean(Area_mm2), by=.(time, Condition)]
+data.bone.sizes[ , Area_sem:=sd(Area_mm2)/sqrt(.N), by=.(time, Condition)]
+
+# subset data
+data.bone.sizes.sel <- data.bone.sizes[ data.bone.sizes$time %in% c("13.5", "14.5", "15.5") ]
+
+# plot
+save.folder.paper <- "/Users/dang/Documents/Projects/Tabler_skull/Manuscript_cell_mvt_model/figs_v4/plots/"
+save.folder.plots <- "/Users/dang/Documents/Projects/Tabler_skull/Data_skull_expansion/plots/2022_07_27/"
+
+ggplot(data.bone.sizes.sel, aes(x=time, color=Condition) )+
+  geom_jitter(aes(y=Area_mm2), width=0.1, height=0)+
+  #geom_pointrange( aes(y=Area_mean, ymin=Area_mean-Area_sem, ymax=Area_mean+Area_sem) )+
+  geom_crossbar( aes(y=Area_mean, ymin=Area_mean-Area_sem, ymax=Area_mean+Area_sem) )+
+  #geom_errorbar( aes(y=Area_mean, ymin=Area_mean-Area_sem, ymax=Area_mean+Area_sem) )+
+  labs(x='', y='Bone area (mm2)' )+
+  scale_x_continuous( breaks=c(13.5, 14.5, 15.5), labels=c("E13.5", "E14.5", "E15.5") )+
+  theme_bw(base_size=14)
+
+# ggsave( paste0(save.folder.paper, "Bone_areas_by_time_condition2.pdf"), width=7, height=5)
+# ggsave( paste0(save.folder.plots, "Bone_areas_by_time_condition2.pdf"), width=7, height=5)
+
+```
+
+
+### Compute densities
+Not doable since we don't have E14.0 bones.
+```{r}
+
+```
+
