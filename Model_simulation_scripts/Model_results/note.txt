@@ -1,0 +1,3 @@
+Simulations from 2024-07-19: 
+	Discretization scheme 1 (Forward_Euler, centered differences)
+	
