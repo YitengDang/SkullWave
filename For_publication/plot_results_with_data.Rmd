@@ -228,8 +228,18 @@ ggplot(data=tmp.plot, aes(x=X.micron, y=phi, color=factor(Time)) )+
         panel.grid.minor = element_blank() )
   #ggsave(filename=paste0(save.folder, paste0(save.id, "_plot_phi_T1_1_51_101.pdf")), width=8, height=3)
 ``` 
+
+```{r}
+tmp.plot$Time[tmp.plot$Time==1] = 0
+tmp.plot$Time[tmp.plot$Time==51] = 3
+tmp.plot$Time[tmp.plot$Time==101] = 6
+tmp.plot
+write.csv(tmp.plot, file = "/Users/ydang3/Documents/Projects_Dresden/Tabler_SkullWave/SkullWave/Code/For_publication/profiles.csv", row.names = FALSE)
+```
+
 ### Plot simulated profile at specific time with experimentally tracked cells
 ```{r}
+
 # Plot together with simulations
 # With all data points
 t.plot <- 1
@@ -257,6 +267,10 @@ ggplot(data=tmp.plot[X.micron>-1000 & X.micron<1000], aes(x=X.micron, y=V) )+
         axis.title=element_text(size=16,face="bold") )
 #ggsave( paste0(save.folder, save.id, '_cell_velocities_profile.pdf'), width=8, height=6  )
 ```
+```{r}
+# write.csv(velocities.mean2, file = "/Users/ydang3/Documents/Projects_Dresden/Tabler_SkullWave/SkullWave/Code/For_publication/temp.csv", row.names = FALSE)
+# write.csv(tmp.plot[X.micron>-1000 & X.micron<1000], file = "/Users/ydang3/Documents/Projects_Dresden/Tabler_SkullWave/SkullWave/Code/For_publication/temp.csv", row.names = FALSE)
+```
 
 ### Plot all interface data together
 Merge everything together and plot
@@ -275,7 +289,10 @@ ggplot(data=data.merged.filt, aes(x=time, y=x_avg, linetype=source, color=locati
   ylim(0, 120)
 #ggsave( paste0(save.folder, save.id, '_plot_all_exp_vs_sim', '.pdf') )
 ```
-
+```{r}
+# data.merged.filt
+# write.csv(data.merged.filt, file = "/Users/ydang3/Documents/Projects_Dresden/Tabler_SkullWave/SkullWave/Code/For_publication/temp.csv", row.names = FALSE)
+```
 
 ### R session
 ```{r}

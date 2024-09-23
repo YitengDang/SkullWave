@@ -1,3 +1,4 @@
+
 ---
 title: "Untitled"
 output: html_document
@@ -114,9 +115,11 @@ wilcox.test( data.densities[cond.ctrl.mes]$cell_density, data.densities[cond.bap
 
 ### Load bone sizes
 ```{r}
-filename <- "/Users/dang/Documents/Projects/Tabler_skull/Data_skull_expansion/Analysed_data/Skull_expansion_2_annotated_bone_sizes.csv"
+# filename <- "/Users/dang/Documents/Projects/Tabler_skull/Data_skull_expansion/Analysed_data/Skull_expansion_2_annotated_bone_sizes.csv"
+filename <- "/Users/ydang3/Documents/Projects_Dresden/Tabler_SkullWave/SkullWave/Data/Skull expansion data/Skull_expansion_2_annotated_bone_sizes.csv"
 data.bone.sizes <- fread(filename, dec=',')
 data.bone.sizes$Condition[data.bone.sizes$Condition=="WT"] = "Control"
+data.bone.sizes
 
 ggplot(data.bone.sizes, aes(x=time, y=Area_micron2, color=Condition) )+
   geom_jitter(width=0.1, height=0)
@@ -148,7 +151,10 @@ ggplot(data.bone.sizes.sel, aes(x=time, color=Condition) )+
 # ggsave( paste0(save.folder.plots, "Bone_areas_by_time_condition2.pdf"), width=7, height=5)
 
 ```
-
+```{r}
+# fwrite( data.bone.sizes.sel, 'test.csv')
+write.csv(data.bone.sizes.sel, file = "/Users/ydang3/Documents/Projects_Dresden/Tabler_SkullWave/SkullWave/Code/For_publication/your_filename.csv", row.names = FALSE)
+```
 
 ### Compute densities
 Not doable since we don't have E14.0 bones.

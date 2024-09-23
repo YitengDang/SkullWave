@@ -69,8 +69,8 @@ ggplot(data.merged, aes(x=weight.mean, y=area.mean, color=time, shape=Condition)
 
 ## Bone size spacings WT vs BAPN
 ```{r load}
-
-filename <- "/Users/dang/Documents/Projects/Tabler_skull/Data_skull_expansion/Analysed_data/Skull_expansion_2_annotated_other.csv"
+# filename <- "/Users/dang/Documents/Projects/Tabler_skull/Data_skull_expansion/Analysed_data/Skull_expansion_2_annotated_other.csv"
+filename <- "/Users/ydang3/Documents/Projects_Dresden/Tabler_SkullWave/SkullWave/Data/Skull expansion data/Skull_expansion_2_annotated_other.csv"
 data <- fread(filename, dec = ",")
 # data <- fread("sed 's/\\0//g' /Users/dang/Documents/Projects/Tabler_skull/Model_parameters/density_estimates.csv", dec = ".")
 
